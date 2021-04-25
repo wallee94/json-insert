@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from unittest import TestCase
@@ -19,11 +20,11 @@ class JSONStreamTest(TestCase):
     def test_whole_json(self):
         streamer = JSONStream()
         s = '{"key": "value"}'
-        self.assertEqual(streamer.stream(s), s)
+        self.assertEqual(streamer.process_chunk(s), s)
 
     def test_json_in_chunks(self):
         streamer = JSONStream()
-        s = ''.join(streamer.stream(chunk) for chunk in chunks_gen(example))
+        s = ''.join(streamer.process_chunk(chunk) for chunk in chunks_gen(example))
         self.assertEqual(s, example)
 
     def test_merge_json_with_unicode_and_escapes(self):
@@ -51,7 +52,7 @@ class JSONStreamTest(TestCase):
             }
         })
         dump = json.dumps(json_with_unicode)
-        s = ''.join(streamer.stream(chunk) for chunk in chunks_gen(dump))
+        s = ''.join(streamer.process_chunk(chunk) for chunk in chunks_gen(dump))
         got = json.loads(s)
 
         want = json_with_unicode
@@ -69,10 +70,47 @@ class JSONStreamTest(TestCase):
             }
         })
 
-        s = ''.join(streamer.stream(chunk) for chunk in chunks_gen(example))
+        s = ''.join(streamer.process_chunk(chunk) for chunk in chunks_gen(example))
         got = json.loads(s)
 
         want = json.loads(example)
         want['glossary']['GlossDiv']['added'] = True
         want['glossary']['GlossDiv']['created_at'] = '2021-02-15'
         self.assertDictEqual(got, want)
+
+    def test_iterator_without_merge(self):
+        gen = chunks_gen(example)
+        streamer = JSONStream()
+        self.assertEqual(''.join(streamer.stream(gen)), example)
+
+    def test_async_generator_without_merge(self):
+        async def async_gen(s):
+            for chunk in chunks_gen(s):
+                yield chunk
+
+        async def _test_async_generator_without_merge():
+            streamer = JSONStream()
+            got = ''.join([s async for s in streamer.astream(async_gen(example))])
+            self.assertEqual(got, example)
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(_test_async_generator_without_merge())
+        loop.close()
+
+    def test_stream_single_str(self):
+        merge = {'a': {'b': {'c': 2}}}
+        streamer = JSONStream(merge)
+        got = ''.join(streamer.stream('{"a": {"b": {"d": 3}, "e": 4}}'))
+        self.assertEqual(got, '{"a": {"b": {"d": 3, "c": 2}, "e": 4}}')
+
+    def test_append_to_empty(self):
+        merge = {'a': 1, 'b': 2}
+        streamer = JSONStream(merge)
+        got = ''.join(streamer.stream('{}'))
+        self.assertEqual(got, '{"a": 1, "b": 2}')
+
+    def test_append_to_flat_json(self):
+        merge = {'a': 1, 'b': 2}
+        streamer = JSONStream(merge)
+        got = ''.join(streamer.stream('{"c": 3, "d": 4}'))
+        self.assertEqual(got, '{"c": 3, "d": 4, "a": 1, "b": 2}')
