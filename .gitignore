@@ -1,5 +1,9 @@
 venv/
 __pycache__/
 .idea/
+build/
+dist/
 
+*.egg-info
 *.pyc
+upload.sh

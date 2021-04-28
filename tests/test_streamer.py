@@ -3,7 +3,7 @@ import json
 import os
 from unittest import TestCase
 
-from json_stream import JSONStream
+from json_insert import JSONStream
 
 with open(os.path.join(os.path.dirname(__file__), 'files', 'simple.json'), 'r') as f:
     example = f.read()
