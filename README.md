@@ -27,13 +27,13 @@ from starlette.responses import StreamingResponse
 client = httpx.AsyncClient()
 
 async def home(request):
-    req = client.build_request("GET", "https://www.example.com/")
-    r = await client.send(req, stream=True)
-
     insert = {
         'timestamp': datetime.utcnow().isoformat()
     }
     streamer = json_insert.JSONStream(insert)
+    
+    req = client.build_request("GET", "https://www.example.com/")
+    r = await client.send(req, stream=True)
     return StreamingResponse(
         streamer.astream(r.aiter_text()), background=BackgroundTask(r.aclose))
 ```
